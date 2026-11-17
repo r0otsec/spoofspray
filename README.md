@@ -20,13 +20,13 @@ SpoofSpray validates credentials against Entra ID's token endpoint using a fake 
 
 ## What it does
 
-SpoofSpray is a small single-file Python tool for **OAuth client-ID spoofing** - the spray technique [Proofpoint wrote up](https://www.proofpoint.com/us/blog/threat-insight/oauth-client-id-spoofing-why-fake-client-ids-are-gaining-traction-stealthy) as attackers' answer to sign-in-log detections. It sends one ROPC (`grant_type=password`) request per account and reads the AADSTS error code that comes back. That code alone tells you everything: whether the user exists, whether the password was right, whether MFA kicked in, whether the account is locked or expired.
+SpoofSpray is a small Python tool for **OAuth client-ID spoofing** - the spray technique [Proofpoint wrote up](https://www.proofpoint.com/us/blog/threat-insight/oauth-client-id-spoofing-why-fake-client-ids-are-gaining-traction-stealthy) as attackers' answer to sign-in-log detections when password spraying against Azure/Entra ID environments. It sends one ROPC (`grant_type=password`) request per account and reads the AADSTS error code that comes back which can indicate various states: whether the user exists, whether the password was right, whether MFA kicked in, whether the account is locked or expired.
 
-It's built for the engagement workflow: spray one password across a user list, work through a password list, watch every request with `--debug`, and save hits in the format you want.
+It's built for helping with potential initial access during authorized engagements. It can spray one password across a user list, work through a small password list (don't lock accounts out!), and save successful hits in an output file for later.
 
 ## How it works
 
-The trick is the ordering. Entra validates the **username and password first**, and only then checks whether the `client_id` in the request is a real application:
+In short, Entra ID validates the **username and password first** and only then checks whether the `client_id` in the request is a real application:
 
 ```bash
 POST https://login.microsoftonline.com/{tenant}/oauth2/token
@@ -37,7 +37,9 @@ POST https://login.microsoftonline.com/{tenant}/oauth2/token
      resource=https://graph.microsoft.com
 ```
 
-Because credentials are checked before the application, a _correct_ password returns `AADSTS700016` ("application not found") - the credentials were fine, Entra just never got as far as registering the sign-in. No successful sign-in event, nothing for the surge-based alerts to see. A wrong password returns `AADSTS50126`, which _is_ logged - so the game is picking codes that tell you what you need without generating the events that burn you.
+Because credentials are checked before the application, a _correct_ password returns `AADSTS700016` ("application not found"). In that case, the credentials were valid but Entra just never got as far as registering the sign-in because the client/application ID was not found. No successful sign-in event gets logged so is **in theory** more OPSEC safe although it's not guaranteed to bypass blue team detections. 
+
+On the other end, a wrong password returns `AADSTS50126`, which _is_ logged - so the cat and mouse game is trying to pick codes that tell you what you need without generating the events that burn you.
 
 Using a malformed GUID (`AADSTS900144`) leaves the application name blank in the sign-in logs entirely, and spreading the spray across rotating user agents and exit proxies keeps the volume per source low.
 
@@ -58,7 +60,7 @@ Using a malformed GUID (`AADSTS900144`) leaves the application name blank in the
 | `AADSTS50005`           | Conditional Access platform restriction.                                                                          |
 | `AADSTS50059`           | Tenant not found.                                                                                                 |
 
-Unknown codes are printed as-is with `-v`, so new ones are one flag away.
+Unknown codes can be printed as-is with `-v` so if Microsoft adds new ones, you can debug and find them easily.
 
 ## Installation
 
@@ -159,17 +161,6 @@ $ python3 spoofspray.py -t client.com -el users.txt -p 'Spring2026!' -v
 ```
 
 <img src="assets/example.png" alt="SpoofSpray" width="900" />
-
-## Errors
-
-SpoofSpray fails the way tools should: no tracebacks. Missing or empty
-list files, a missing tenant, an unknown flag (with a `did you mean`
-suggestion against the real options), a URL passed as a tenant, a
-malformed proxy, and unwritable output files each produce a one-line
-`[!] error:` message and a proper exit code. A non-GUID client ID is
-allowed (that is the `AADSTS900144` trick) but prints a note saying
-what it means. Unexpected failures print a clean error too - rerun with
-`--debug` to see the traceback.
 
 ## Safety
 
