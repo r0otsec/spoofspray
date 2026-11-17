@@ -31,8 +31,6 @@ import requests
 
 VERSION = "1.0.0"
 
-# oh365userfinder's colour trio: bright yellow info, bright red failures,
-# bright green successes.
 INFO = "\033[93;1m"
 FAIL = "\033[91;1m"
 OK = "\033[92;1m"
@@ -40,11 +38,8 @@ WARN = "\033[33;1m"
 DEBUG = "\033[36m"
 RESET = "\033[0m"
 
-# Classification table (pwnedlabs spoof2.png + oh365userfinder's checks).
-# Priority order matters: the first matching code in the response wins.
 RESULT_TABLE = [
-    # (aadsts code regex, result label, category: valid | invalid | info)
-    (r"AADSTS700016", "VALID PASSWORD - STEALTH (no sign-in logged)", "valid"),
+    (r"AADSTS700016", "VALID PASSWORD - (no sign-in logged)", "valid"),
     (r"AADSTS50076|AADSTS50079", "VALID PASSWORD - MFA REQUIRED", "valid"),
     (r"AADSTS50055|AADSTS50144", "VALID PASSWORD - EXPIRED", "valid"),
     (r"AADSTS50053", "Account Locked!", "info"),
@@ -415,7 +410,7 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print(f"\n{INFO}[info] Interrupted - scan stopped at {time.ctime()}{RESET}")
         sys.exit(130)
-    except Exception as exc:  # safety net: never dump a raw traceback
+    except Exception as exc:
         if "--debug" in sys.argv:
             raise
         fail(f"unexpected error: {exc} - rerun with --debug for a traceback")
